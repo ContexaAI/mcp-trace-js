@@ -109,7 +109,7 @@ export class ContexaTraceAdapter implements TraceAdapter {
                 if (response.ok) return;
 
                 const errorText = await response.text();
-                console.error(`[ContexaTraceAdapter] Server error (status ${response.status}): ${errorText} ${this.apiUrl}`);
+                console.error(`[ContexaTraceAdapter] Server error (status ${response.status}): ${errorText}`);
             } catch (error) {
                 console.error(`[ContexaTraceAdapter] Network error (attempt ${attempt}):`, error);
             }
