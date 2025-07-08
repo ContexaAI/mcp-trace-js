@@ -4,16 +4,18 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    FileAdapter,
+    ConsoleAdapter,
     TraceMiddleware
 } from '../src';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from "node:crypto";
+
+
 // Set up tracing middleware
-const fileAdapter = new FileAdapter('streamable-http-trace.log');
+const consoleAdapter = new ConsoleAdapter();
 const traceMiddleware = new TraceMiddleware({
-    adapter: fileAdapter
+    adapter: consoleAdapter
 });
 
 const server = new McpServer({
@@ -58,7 +60,6 @@ async function main() {
     app.use("/mcp", express.json());
     app.post("/mcp", async (req, res) => {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        console.error("Session ID", { sessionId });
 
         let transport: StreamableHTTPServerTransport;
         // Initial session creation
@@ -79,15 +80,10 @@ async function main() {
 
             await server.connect(transport);
 
-            console.error("New session transport created", {
-                sessionId: transport.sessionId,
-            });
         } else if (sessionId && streamableHttpTransports[sessionId]) {
-            console.error("Reusing existing session transport", { sessionId });
             // Todo must be a better way to handle this duplication
             transport = streamableHttpTransports[sessionId];
         } else {
-            console.error("No valid session ID provided", { sessionId });
             res.status(400).json({ error: "No valid session ID provided" });
             return;
         }
