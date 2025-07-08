@@ -1,6 +1,6 @@
 {
   "name": "mcp-trace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Flexible, pluggable tracing middleware for Model Context Protocol (MCP) servers in JavaScript/TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -55,5 +55,9 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0"
-  }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
