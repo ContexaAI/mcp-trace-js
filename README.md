@@ -1,6 +1,10 @@
-# mcp-trace-js
+# mcp-trace
 
-> **Flexible, pluggable tracing middleware for Model Context Protocol (MCP) servers in JavaScript/TypeScript.** Log every request, tool call, and response to local files, PostgreSQL, Supabase, or your own backend—with full control over what gets logged.
+<div align="center">
+  <img src="images/MCP-TRACE.png" alt="MCP Trace JS Logo" />
+</div>
+
+> **Flexible, pluggable tracing middleware for Model Context Protocol (MCP) servers in JavaScript/TypeScript.** Log every request, tool call, and response to local files, PostgreSQL, Supabase, Contexa, console, or your own backend—with full control over what gets logged.
 
 ---
 
@@ -9,7 +13,8 @@
 - [Features](#features)
 - [Quickstart](#quickstart)
 - [Adapters](#adapters)
-  - [Local File Adapter](#local-file-adapter)
+  - [File Adapter](#file-adapter)
+  - [Console Adapter](#console-adapter)
   - [Contexa Adapter](#contexa-adapter)
   - [PostgreSQL Adapter](#postgresql-adapter)
   - [Supabase Adapter](#supabase-adapter)
@@ -25,7 +30,7 @@
 ## Features
 
 - 📦 **Plug-and-play**: Add tracing to any MCP server in seconds
-- 🗃️ **Pluggable adapters**: Log to file, PostgreSQL, Supabase, or your own
+- 🗃️ **Pluggable adapters**: Log to file, PostgreSQL, Supabase, Contexa, console, or your own
 - 🛠️ **Configurable logging**: Enable/disable fields (tool args, responses, client ID, etc.)
 - 🧩 **Composable**: Use multiple adapters at once
 - 📝 **Schema-first**: All traces stored as JSON for easy querying
@@ -39,20 +44,20 @@
 ### Installation
 
 ```bash
-npm install mcp-trace-js
+npm install mcp-trace
 ```
 
 ### Minimal Example
 
 ```typescript
-import { TraceMiddleware } from "mcp-trace-js";
-import { LocalTraceAdapter } from "mcp-trace-js";
+import { TraceMiddleware, FileAdapter } from "mcp-trace-js";
 
-const traceAdapter = new LocalTraceAdapter("trace.log");
+const traceAdapter = new FileAdapter("trace.log");
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
 
 // Use in your MCP server
 // See examples/ for integration details
+```
 
 ---
 
@@ -83,35 +88,49 @@ npm run example:streamable-http
 ```
 
 This example demonstrates:
+
 - Setting up an MCP server with Streamable HTTP transport
 - Registering tools with tracing integration
 - Handling HTTP requests with proper tracing
 - Graceful shutdown with trace flushing
 
 The server includes:
+
 - **Addition tool**: Adds two numbers
 - **Search tool**: Simulates search functionality
 - **Health check endpoint**: `/health`
 - **MCP endpoint**: `/mcp` (GET and POST)
 - **Tracing**: All requests and tool calls are traced to `streamable-http-trace.log`
-```
+
+````
 
 ---
 
 ## Adapters
 
-### Local File Adapter
+### File Adapter
 
 Logs each trace as a JSON line to a file.
 
 ```typescript
-import { LocalTraceAdapter } from "mcp-trace-js";
+import { FileAdapter } from "mcp-trace-js";
 
-const traceAdapter = new LocalTraceAdapter("trace.log");
+const traceAdapter = new FileAdapter("trace.log");
+const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
+````
+
+### Console Adapter
+
+Logs each trace to the console in a human-readable format (with colors).
+
+```typescript
+import { ConsoleAdapter } from "mcp-trace-js";
+
+const traceAdapter = new ConsoleAdapter();
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
 ```
 
-### Contexa Adapter
+### ContexaAI Adapter
 
 Send traces to Contexa for cloud-based trace storage and analytics.
 
@@ -134,6 +153,7 @@ import { ContexaTraceAdapter } from "mcp-trace-js";
 const contexaAdapter = new ContexaTraceAdapter({
   apiKey: "your-api-key",
   serverId: "your-server-id",
+  // Optional: apiUrl, bufferSize, flushInterval, maxRetries, retryDelay
 });
 
 const traceMiddleware = new TraceMiddleware({ adapter: contexaAdapter });
@@ -150,11 +170,18 @@ Store traces in a PostgreSQL table for easy querying and analytics.
 **Table schema:**
 
 ```sql
-CREATE TABLE mcp_traces (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    session_id TEXT NOT NULL,
-    trace_data JSONB NOT NULL
+CREATE TABLE IF NOT EXISTS trace_events (
+  id SERIAL PRIMARY KEY,
+  timestamp TIMESTAMPTZ NOT NULL,
+  type TEXT NOT NULL,
+  method TEXT,
+  session_id TEXT NOT NULL,
+  client_id TEXT,
+  duration INTEGER,
+  entity_name TEXT,
+  arguments JSONB,
+  response TEXT,
+  error TEXT
 );
 ```
 
@@ -165,6 +192,7 @@ import { PostgresTraceAdapter } from "mcp-trace-js";
 
 const psqlAdapter = new PostgresTraceAdapter({
   dsn: "postgresql://user:pass@host:port/dbname",
+  // Optional: tableName
 });
 const traceMiddleware = new TraceMiddleware({ adapter: psqlAdapter });
 ```
@@ -173,7 +201,7 @@ const traceMiddleware = new TraceMiddleware({ adapter: psqlAdapter });
 
 Log traces to Supabase (PostgreSQL as a service).
 
-**Table schema:** (same as above)
+**Table schema:** (same as PostgreSQL above)
 
 **Install:**
 
@@ -197,16 +225,21 @@ const traceMiddleware = new TraceMiddleware({ adapter: supabaseAdapter });
 Send traces to multiple backends at once:
 
 ```typescript
-import { MultiAdapter } from "mcp-trace-js";
+import {
+  FileAdapter,
+  PostgresTraceAdapter,
+  SupabaseTraceAdapter,
+  MultiAdapter,
+} from "mcp-trace-js";
 
-const localAdapter = new LocalTraceAdapter("trace.log");
+const fileAdapter = new FileAdapter("trace.log");
 const psqlAdapter = new PostgresTraceAdapter({
   dsn: "postgresql://user:pass@host:port/dbname",
 });
 const supabaseAdapter = new SupabaseTraceAdapter({ supabaseClient: supabase });
 
 const multiAdapter = new MultiAdapter(
-  localAdapter,
+  fileAdapter,
   psqlAdapter,
   supabaseAdapter
 );
