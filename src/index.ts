@@ -8,5 +8,5 @@ export { ContexaConfig, ContexaTraceAdapter } from './adapters/contexa';
 export { FileAdapter } from './adapters/file-adapter';
 export { MultiAdapter } from './adapters/multi';
 export { PostgresTraceAdapter } from './adapters/postgres-adapter';
-export { SupabaseConfig, SupabaseTraceAdapter } from './adapters/supabase';
+export { SupabaseConfig, SupabaseTraceAdapter } from './adapters/supabase-adapter';
 

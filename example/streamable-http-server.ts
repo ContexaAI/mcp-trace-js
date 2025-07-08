@@ -4,18 +4,23 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    PostgresTraceAdapter,
+    SupabaseTraceAdapter,
     TraceMiddleware
 } from '../src';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
+const supabase = createClient(
+    'supabase-url',
+    'supabase-anon-key'
+);
 
 // Set up tracing middleware
-const consoleAdapter = new PostgresTraceAdapter(
+const consoleAdapter = new SupabaseTraceAdapter(
     {
-        dsn: 'postgresql://akshaygalande@127.0.0.1/aiinfra',
+        supabaseClient: supabase,
     }
 );
 const traceMiddleware = new TraceMiddleware({
