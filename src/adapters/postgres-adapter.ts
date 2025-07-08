@@ -6,6 +6,7 @@ import { TraceAdapter, TraceData } from '../types';
  * ```sql
 CREATE TABLE IF NOT EXISTS trace_events (
   id SERIAL PRIMARY KEY,
+  timestamp TIMESTAMPTZ NOT NULL,
   type TEXT NOT NULL,
   method TEXT,
   session_id TEXT NOT NULL,
@@ -80,12 +81,13 @@ export class PostgresTraceAdapter implements TraceAdapter {
 
       const insertSQL = `
         INSERT INTO ${this.tableName} (
-          type, method, session_id, client_id, duration,
+          timestamp, type, method, session_id, client_id, duration,
           entity_name, arguments, response, error
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `;
 
       const values = [
+        traceData.timestamp,
         traceData.type,
         traceData.method ?? null,
         traceData.session_id,
