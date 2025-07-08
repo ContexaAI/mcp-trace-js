@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    ContexaTraceAdapter,
+    ConsoleAdapter,
     TraceMiddleware
 } from '../src';
 
@@ -13,17 +13,10 @@ import { randomUUID } from "node:crypto";
 
 
 // Set up tracing middleware
-const contexaAdapter = new ContexaTraceAdapter({
-    apiKey: '1873c789fdc8cec9871b7345f5e8a2a8982bd4a54a0cd0817bf778049d010196',
-    serverId: 'Akshays-MacBook-Pro.local',
-    bufferSize: 100,
-    flushInterval: 1000,
-    maxRetries: 1,
-    retryDelay: 100
-});
+const consoleAdapter = new ConsoleAdapter();
 
 const traceMiddleware = new TraceMiddleware({
-    adapter: contexaAdapter
+    adapter: consoleAdapter
 });
 
 const server = new McpServer({
