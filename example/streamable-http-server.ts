@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    ConsoleAdapter,
+    PostgresTraceAdapter,
     TraceMiddleware
 } from '../src';
 
@@ -13,7 +13,11 @@ import { randomUUID } from "node:crypto";
 
 
 // Set up tracing middleware
-const consoleAdapter = new ConsoleAdapter();
+const consoleAdapter = new PostgresTraceAdapter(
+    {
+        dsn: 'postgresql://akshaygalande@127.0.0.1/aiinfra',
+    }
+);
 const traceMiddleware = new TraceMiddleware({
     adapter: consoleAdapter
 });
