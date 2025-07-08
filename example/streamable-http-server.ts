@@ -4,16 +4,16 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    LocalTraceAdapter,
+    FileAdapter,
     TraceMiddleware
 } from '../src';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from "node:crypto";
 // Set up tracing middleware
-const localAdapter = new LocalTraceAdapter('streamable-http-trace.log');
+const fileAdapter = new FileAdapter('streamable-http-trace.log');
 const traceMiddleware = new TraceMiddleware({
-    adapter: localAdapter
+    adapter: fileAdapter
 });
 
 const server = new McpServer({

@@ -4,7 +4,7 @@ export { LogFields, TraceAdapter, TraceData, TraceMiddlewareOptions } from './ty
 
 // Adapters
 export { ContexaConfig, ContexaTraceAdapter } from './adapters/contexa';
-export { LocalTraceAdapter } from './adapters/local';
+export { FileAdapter } from './adapters/file-adapter';
 export { MultiAdapter } from './adapters/multi';
 export { PostgresConfig, PostgresTraceAdapter } from './adapters/postgres';
 export { SupabaseConfig, SupabaseTraceAdapter } from './adapters/supabase';
