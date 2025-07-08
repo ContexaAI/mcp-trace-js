@@ -1,5 +1,5 @@
 {
-  "name": "mcp-trace-js",
+  "name": "mcp-trace",
   "version": "0.1.0",
   "description": "Flexible, pluggable tracing middleware for Model Context Protocol (MCP) servers in JavaScript/TypeScript",
   "main": "dist/index.js",
@@ -22,16 +22,16 @@
     "typescript",
     "javascript"
   ],
-  "author": "Your Name",
+  "author": "ContexaAI",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/mcp-trace-js.git"
+    "url": "https://github.com/ContexaAI/mcp-trace-js.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/mcp-trace-js/issues"
+    "url": "https://github.com/ContexaAI/mcp-trace-js/issues"
   },
-  "homepage": "https://github.com/yourusername/mcp-trace-js#readme",
+  "homepage": "https://github.com/ContexaAI/mcp-trace-js#readme",
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
