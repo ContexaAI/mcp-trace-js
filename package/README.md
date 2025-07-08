@@ -15,13 +15,23 @@
 - [Adapters](#adapters)
   - [File Adapter](#file-adapter)
   - [Console Adapter](#console-adapter)
-  - [Contexa Adapter](#contexa-adapter)
+  - [Contexa Adapter](#contexaai-adapter)
   - [PostgreSQL Adapter](#postgresql-adapter)
   - [Supabase Adapter](#supabase-adapter)
   - [Multi-Adapter Example](#multi-adapter-example)
 - [Configurable Logging](#configurable-logging)
 - [Requirements](#requirements)
 - [Contributing](#contributing)
+  - [How to Contribute](#-how-to-contribute)
+  - [Reporting Bugs](#-reporting-bugs)
+  - [Feature Requests](#-feature-requests)
+  - [Code Standards](#-code-standards)
+  - [Testing Guidelines](#-testing-guidelines)
+  - [Documentation Standards](#-documentation-standards)
+  - [Release Process](#-release-process)
+  - [Areas for Contribution](#-areas-for-contribution)
+  - [Getting Help](#-getting-help)
+  - [Recognition](#-recognition)
 - [License](#license)
 - [Links & Acknowledgements](#links--acknowledgements)
 
@@ -286,7 +296,201 @@ const traceMiddleware = new TraceMiddleware({
 
 ## Contributing
 
-We love contributions! Please open issues for bugs or feature requests, and submit pull requests for improvements.
+We love contributions! This project thrives on community involvement. Whether you're fixing bugs, adding features, improving documentation, or suggesting ideas, your contributions are welcome.
+
+### 🤝 How to Contribute
+
+#### **Before You Start**
+
+- Check existing [issues](https://github.com/your-org/mcp-trace-js/issues) to see if your idea is already being worked on
+- For major changes, please open an issue first to discuss what you'd like to change
+- Make sure your code follows our coding standards (see below)
+
+#### **Development Setup**
+
+1. **Fork and Clone**
+
+   ```bash
+   git clone https://github.com/your-username/mcp-trace-js.git
+   cd mcp-trace-js
+   ```
+
+2. **Install Dependencies**
+
+   ```bash
+   npm install
+   ```
+
+
+3. **Run Examples**
+   ```bash
+   npm run example
+   npm run example:mcp
+   npm run example:streamable-http
+   ```
+
+#### **Making Changes**
+
+1. **Create a Feature Branch**
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or
+   git checkout -b fix/your-bug-fix
+   ```
+
+2. **Follow Our Coding Standards**
+
+   - Use TypeScript for all new code
+   - Follow the existing code style and formatting
+   - Add JSDoc comments for public APIs
+   - Write meaningful commit messages
+   - Keep functions small and focused
+
+3. **Testing**
+
+   - Add tests for new functionality
+   - Ensure all existing tests pass
+   - Test with multiple Node.js versions if possible
+
+4. **Documentation**
+   - Update README.md if adding new features
+   - Add inline documentation for complex logic
+   - Update examples if API changes
+
+#### **Pull Request Process**
+
+1. **Prepare Your PR**
+
+   - Ensure your code follows our standards
+   - Add tests for new functionality
+   - Update documentation as needed
+   - Make sure all CI checks pass
+
+2. **PR Description**
+
+   - Clearly describe the problem and solution
+   - Include any relevant issue numbers
+   - Add screenshots for UI changes
+   - List any breaking changes
+
+3. **Review Process**
+   - At least one maintainer must approve
+   - Address any feedback from reviewers
+   - Keep the PR focused and manageable
+
+### 🐛 Reporting Bugs
+
+When reporting bugs, please include:
+
+- **Environment**: Node.js version, OS, package version
+- **Steps to Reproduce**: Clear, step-by-step instructions
+- **Expected vs Actual Behavior**: What you expected vs what happened
+- **Code Example**: Minimal code that reproduces the issue
+- **Error Messages**: Full error stack traces if applicable
+
+### 💡 Feature Requests
+
+For feature requests:
+
+- **Use Case**: Explain why this feature would be useful
+- **Proposed API**: Suggest how the feature might work
+- **Alternatives**: Mention if you've considered other approaches
+- **Implementation**: If you have ideas on how to implement it
+
+### 📋 Code Standards
+
+#### **TypeScript**
+
+- Use strict TypeScript configuration
+- Prefer interfaces over types for object shapes
+- Use meaningful type names
+- Avoid `any` - use proper typing
+
+#### **Code Style**
+
+- Use 2-space indentation
+- Use semicolons
+- Use single quotes for strings
+- Use trailing commas in objects and arrays
+- Maximum line length: 100 characters
+
+#### **Naming Conventions**
+
+- Use camelCase for variables and functions
+- Use PascalCase for classes and interfaces
+- Use UPPER_SNAKE_CASE for constants
+- Use descriptive names that explain intent
+
+#### **Error Handling**
+
+- Use proper error types
+- Include meaningful error messages
+- Handle async errors appropriately
+- Log errors with context
+
+### 🧪 Testing Guidelines
+
+- Write unit tests for all new functionality
+- Use descriptive test names
+- Test both success and error cases
+- Mock external dependencies
+- Keep tests fast and reliable
+
+### 📚 Documentation Standards
+
+- Keep README.md up to date
+- Use clear, concise language
+- Include code examples
+- Document breaking changes
+- Update API documentation
+
+### 🚀 Release Process
+
+1. **Version Bumping**
+
+   - Use semantic versioning (semver)
+   - Update package.json version
+
+2. **Pre-release Checklist**
+
+   - All tests pass
+   - Documentation is updated
+   - Examples work correctly
+   - No breaking changes (unless major version)
+
+3. **Publishing**
+   - Create a git tag
+   - Publish to npm
+   - Update release notes
+
+### 🎯 Areas for Contribution
+
+We're particularly interested in contributions for:
+
+- **New Adapters**: Database adapters, cloud services, etc.
+- **Performance Improvements**: Faster tracing, better memory usage
+- **Testing**: More comprehensive test coverage
+- **Documentation**: Better examples, tutorials, guides
+- **Bug Fixes**: Any issues you encounter
+- **TypeScript Improvements**: Better type definitions
+- **Examples**: More integration examples
+
+### 📞 Getting Help
+
+- **Issues**: Use GitHub issues for bugs and feature requests
+- **Discussions**: Use GitHub Discussions for questions and ideas
+- **Code of Conduct**: Be respectful and inclusive
+
+### 🙏 Recognition
+
+Contributors will be recognized in:
+
+- README.md contributors section
+- Release notes
+- GitHub contributors page
+
+Thank you for contributing to mcp-trace-js! 🎉
 
 ---
 
