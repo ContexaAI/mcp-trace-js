@@ -4,27 +4,26 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    SupabaseTraceAdapter,
+    ContexaTraceAdapter,
     TraceMiddleware
 } from '../src';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
-const supabase = createClient(
-    'supabase-url',
-    'supabase-anon-key'
-);
 
 // Set up tracing middleware
-const consoleAdapter = new SupabaseTraceAdapter(
-    {
-        supabaseClient: supabase,
-    }
-);
+const contexaAdapter = new ContexaTraceAdapter({
+    apiKey: '1873c789fdc8cec9871b7345f5e8a2a8982bd4a54a0cd0817bf778049d010196',
+    serverId: 'Akshays-MacBook-Pro.local',
+    bufferSize: 100,
+    flushInterval: 1000,
+    maxRetries: 1,
+    retryDelay: 100
+});
+
 const traceMiddleware = new TraceMiddleware({
-    adapter: consoleAdapter
+    adapter: contexaAdapter
 });
 
 const server = new McpServer({
