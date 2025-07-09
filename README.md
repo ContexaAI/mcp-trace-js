@@ -102,7 +102,6 @@ The server includes:
 - **MCP endpoint**: `/mcp` (GET and POST)
 - **Tracing**: All requests and tool calls are traced to `streamable-http-trace.log`
 
-````
 
 ---
 
@@ -117,17 +116,19 @@ import { FileAdapter } from "mcp-trace-js";
 
 const traceAdapter = new FileAdapter("trace.log");
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
-````
+app.use('/mcp', traceMiddleware.express())
+```
 
 ### Console Adapter
 
 Logs each trace to the console in a human-readable format (with colors).
 
-```typescript
+``` typescript
 import { ConsoleAdapter } from "mcp-trace-js";
 
 const traceAdapter = new ConsoleAdapter();
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
+app.use('/mcp', traceMiddleware.express())
 ```
 
 ### ContexaAI Adapter
@@ -161,6 +162,8 @@ const traceMiddleware = new TraceMiddleware({ adapter: contexaAdapter });
 // On shutdown, ensure all events are sent:
 await contexaAdapter.flush(5000);
 await contexaAdapter.shutdown();
+
+app.use('/mcp', traceMiddleware.express())
 ```
 
 ### PostgreSQL Adapter
@@ -195,6 +198,8 @@ const psqlAdapter = new PostgresTraceAdapter({
   // Optional: tableName
 });
 const traceMiddleware = new TraceMiddleware({ adapter: psqlAdapter });
+
+app.use('/mcp', traceMiddleware.express())
 ```
 
 ### Supabase Adapter
@@ -218,6 +223,8 @@ import { SupabaseTraceAdapter } from "mcp-trace-js";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const supabaseAdapter = new SupabaseTraceAdapter({ supabaseClient: supabase });
 const traceMiddleware = new TraceMiddleware({ adapter: supabaseAdapter });
+
+app.use('/mcp', traceMiddleware.express())
 ```
 
 ### Multi-Adapter Example
@@ -244,6 +251,8 @@ const multiAdapter = new MultiAdapter(
   supabaseAdapter
 );
 const traceMiddleware = new TraceMiddleware({ adapter: multiAdapter });
+
+app.use('/mcp', traceMiddleware.express())
 ```
 
 ---
