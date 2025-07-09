@@ -28,7 +28,7 @@ export class ContexaTraceAdapter implements TraceAdapter {
     private stop = false;
 
     constructor(config: ContexaTraceAdapterConfig = {}) {
-        this.apiUrl = config.apiUrl || process.env.CONTEXA_API_URL || 'http://localhost:4000/v1/trace/ingest';
+        this.apiUrl = config.apiUrl || process.env.CONTEXA_API_URL || 'https://api.contexaai.com/v1/trace/ingest';
         this.apiKey = config.apiKey || process.env.CONTEXA_API_KEY || '';
         this.serverId = config.serverId || process.env.CONTEXA_SERVER_ID || '';
         this.bufferSize = config.bufferSize ?? 1000;
@@ -37,11 +37,11 @@ export class ContexaTraceAdapter implements TraceAdapter {
         this.retryDelay = config.retryDelay ?? 2000;
 
         if (!this.apiKey) {
-            throw new Error('[ContexaTraceAdapter] Missing API key. Provide via `apiKey` or CONTEXA_API_KEY.');
+            console.warn('[ContexaTraceAdapter] Missing API key. Provide via `apiKey` or CONTEXA_API_KEY. Tracing will be disabled.');
         }
 
         if (!this.serverId) {
-            throw new Error('[ContexaTraceAdapter] Missing server ID. Provide via `serverId` or CONTEXA_SERVER_ID.');
+            console.warn('[ContexaTraceAdapter] Missing server ID. Provide via `serverId` or CONTEXA_SERVER_ID. Tracing will be disabled.');
         }
 
         this.headers = {
@@ -55,6 +55,11 @@ export class ContexaTraceAdapter implements TraceAdapter {
      * Adds a trace event to the buffer and starts the worker if not already running.
      */
     export(traceData: TraceData): void {
+        // Skip tracing if not properly configured
+        if (!this.apiKey || !this.serverId) {
+            return;
+        }
+
         if (this.buffer.length < this.bufferSize) {
             this.buffer.push(traceData);
             this.startWorker();
