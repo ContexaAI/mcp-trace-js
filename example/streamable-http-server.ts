@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    ConsoleAdapter,
+    ContexaTraceAdapter,
     TraceMiddleware
 } from '../src';
 
@@ -13,10 +13,10 @@ import { randomUUID } from "node:crypto";
 
 
 // Set up tracing middleware
-const consoleAdapter = new ConsoleAdapter();
+const contexaAdapter = new ContexaTraceAdapter();
 
 const traceMiddleware = new TraceMiddleware({
-    adapter: consoleAdapter
+    adapter: contexaAdapter
 });
 
 const server = new McpServer({

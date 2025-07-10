@@ -93,12 +93,12 @@ export class PostgresTraceAdapter implements TraceAdapter {
         traceData.session_id,
         traceData.client_id ?? null,
         traceData.duration ?? null,
-        traceData.entity_name ?? null,
-        traceData.entity_params ? JSON.stringify(traceData.entity_params) : null,
-        traceData.entity_response !== undefined
-          ? typeof traceData.entity_response === 'object'
-            ? JSON.stringify(traceData.entity_response)
-            : String(traceData.entity_response)
+        traceData.arguments ?? null,
+        traceData.arguments ? JSON.stringify(traceData.arguments) : null,
+        traceData.response !== undefined
+          ? typeof traceData.response === 'object'
+            ? JSON.stringify(traceData.response)
+            : String(traceData.response)
           : null,
         traceData.error ?? null
       ];

@@ -50,8 +50,8 @@ export class TraceMiddleware {
             client_id: true,
             duration: true,
             entity_name: true,
-            entity_params: true,
-            entity_response: true,
+            arguments: true,
+            response: true,
             error: true,
             ...options.logFields,
         };
@@ -266,8 +266,8 @@ export class TraceMiddleware {
                     session_id: sessionID,
                     client_id: clientID,
                     entity_name: entityName,
-                    entity_params: entityParams,
-                    entity_response: entityResponse,
+                    arguments: entityParams,
+                    response: entityResponse,
                     duration,
                     error: res.statusCode >= 400 ? `HTTP ${res.statusCode}` : undefined,
                 });
@@ -290,8 +290,8 @@ export class TraceMiddleware {
                         session_id: sessionID,
                         client_id: clientID,
                         entity_name: entityName,
-                        entity_params: entityParams,
-                        entity_response: undefined,
+                        arguments: entityParams,
+                        response: undefined,
                         duration,
                         error: "Connection aborted",
                     });

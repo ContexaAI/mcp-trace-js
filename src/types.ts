@@ -6,8 +6,8 @@ export interface TraceData {
     client_id?: string;
     duration?: number;
     entity_name?: string;
-    entity_params?: any;
-    entity_response?: any;
+    arguments?: any;
+    response?: any;
     error?: string;
 }
 
@@ -19,8 +19,8 @@ export interface LogFields {
     client_id?: boolean;
     duration?: boolean;
     entity_name?: boolean;
-    entity_params?: boolean;
-    entity_response?: boolean;
+    arguments?: boolean;
+    response?: boolean;
     error?: boolean;
 }
 

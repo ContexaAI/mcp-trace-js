@@ -41,13 +41,13 @@ export class SupabaseTraceAdapter implements TraceAdapter {
                         session_id: traceData.session_id,
                         client_id: traceData.client_id ?? null,
                         duration: traceData.duration ?? null,
-                        entity_name: traceData.entity_name ?? null,
-                        arguments: traceData.entity_params ?? null,
+                        entity_name: traceData.arguments ?? null,
+                        arguments: traceData.arguments ?? null,
                         response:
-                            traceData.entity_response !== undefined
-                                ? typeof traceData.entity_response === 'object'
-                                    ? JSON.stringify(traceData.entity_response)
-                                    : String(traceData.entity_response)
+                            traceData.response !== undefined
+                                ? typeof traceData.response === 'object'
+                                    ? JSON.stringify(traceData.response)
+                                    : String(traceData.response)
                                 : null,
                         error: traceData.error ?? null,
                         timestamp: traceData.timestamp
