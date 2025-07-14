@@ -227,6 +227,8 @@ app.use('/mcp', traceMiddleware.express())
 
 ## Configurable Logging
 
+### Field-Level Control
+
 Control exactly which fields are logged by passing a `logFields` dictionary to `TraceMiddleware`. By default, all fields are logged unless set to `false`.
 
 **Available fields:**
@@ -248,6 +250,21 @@ const traceMiddleware = new TraceMiddleware({
   },
 });
 ```
+
+### Request-Level Control
+
+Skip tracing for specific requests by adding the `X-Ignore-Traces` header:
+
+```bash
+# Skip tracing for this request
+curl -H "X-Ignore-Traces: true" http://localhost:8080/mcp
+```
+
+**Supported header formats:**
+- `X-Ignore-Traces: true`
+- `x-ignore-traces: true`
+
+When this header is present, the middleware will skip all tracing logic and continue to the next middleware without any performance overhead.
 
 ---
 
