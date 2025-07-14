@@ -55,29 +55,13 @@ import { TraceMiddleware, FileAdapter } from "mcp-trace-js";
 const traceAdapter = new FileAdapter("trace.log");
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
 
-// Use in your MCP server
-// See examples/ for integration details
+
+mcpServer.use('/mcp', traceMiddleware.express())
 ```
 
 ---
 
 ## Examples
-
-### Basic Usage
-
-See `example/basic-usage.ts` for a simple demonstration of all adapters.
-
-```bash
-npm run example
-```
-
-### MCP Server Integration
-
-See `example/mcp-server-integration.ts` for how to integrate tracing with an MCP server.
-
-```bash
-npm run example:mcp
-```
 
 ### Streamable HTTP Server
 
@@ -86,22 +70,6 @@ See `example/streamable-http-server.ts` for a complete MCP server using Streamab
 ```bash
 npm run example:streamable-http
 ```
-
-This example demonstrates:
-
-- Setting up an MCP server with Streamable HTTP transport
-- Registering tools with tracing integration
-- Handling HTTP requests with proper tracing
-- Graceful shutdown with trace flushing
-
-The server includes:
-
-- **Addition tool**: Adds two numbers
-- **Search tool**: Simulates search functionality
-- **Health check endpoint**: `/health`
-- **MCP endpoint**: `/mcp` (GET and POST)
-- **Tracing**: All requests and tool calls are traced to `streamable-http-trace.log`
-
 
 ---
 

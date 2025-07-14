@@ -9,9 +9,7 @@
     "start": "ts-node src/index.ts",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "example": "ts-node example/basic-usage.ts",
-    "example:mcp": "ts-node example/mcp-server-integration.ts",
-    "example:streamable-http": "ts-node example/streamable-http-server.ts"
+    "example": "ts-node example/streamable-http-server.ts"
   },
   "keywords": [
     "mcp",
