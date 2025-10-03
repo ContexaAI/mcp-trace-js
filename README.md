@@ -36,6 +36,9 @@
 - 📝 **Schema-first**: All traces stored as JSON for easy querying
 - 🔒 **Privacy-aware**: Control exactly what gets logged
 - ⚡ **TypeScript support**: Full type safety and IntelliSense
+- 🛡️ **Production-ready**: Comprehensive error handling and memory management
+- 🔧 **Robust validation**: Configuration validation with descriptive error messages
+- 🧹 **Automatic cleanup**: Prevents memory leaks with timeout management
 
 ---
 
@@ -51,12 +54,19 @@ npm install mcp-trace
 
 ```typescript
 import { TraceMiddleware, FileAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+// Create your MCP server
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
+
+// Set up tracing
 const traceAdapter = new FileAdapter("trace.log");
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
 
+// Initialize tracing with your server
+traceMiddleware.init(server);
 
-mcpServer.use('/mcp', traceMiddleware.express())
+// Your server is now fully traced!
 ```
 
 ---
@@ -80,23 +90,29 @@ npm run example:streamable-http
 Logs each trace as a JSON line to a file.
 
 ```typescript
-import { FileAdapter } from "mcp-trace-js";
+import { TraceMiddleware, FileAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 const traceAdapter = new FileAdapter("trace.log");
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
-app.use('/mcp', traceMiddleware.express())
+
+traceMiddleware.init(server);
 ```
 
 ### Console Adapter
 
 Logs each trace to the console in a human-readable format (with colors).
 
-``` typescript
-import { ConsoleAdapter } from "mcp-trace-js";
+```typescript
+import { TraceMiddleware, ConsoleAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 const traceAdapter = new ConsoleAdapter();
 const traceMiddleware = new TraceMiddleware({ adapter: traceAdapter });
-app.use('/mcp', traceMiddleware.express())
+
+traceMiddleware.init(server);
 ```
 
 ### ContexaAI Adapter
@@ -111,7 +127,10 @@ Send traces to Contexa for cloud-based trace storage and analytics.
 **Usage:**
 
 ```typescript
-import { ContexaTraceAdapter } from "mcp-trace-js";
+import { TraceMiddleware, ContexaTraceAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 
 // Option 1: Set environment variables
 // process.env.CONTEXA_API_KEY = 'your-api-key';
@@ -126,12 +145,11 @@ const contexaAdapter = new ContexaTraceAdapter({
 });
 
 const traceMiddleware = new TraceMiddleware({ adapter: contexaAdapter });
+traceMiddleware.init(server);
 
 // On shutdown, ensure all events are sent:
 await contexaAdapter.flush(5000);
 await contexaAdapter.shutdown();
-
-app.use('/mcp', traceMiddleware.express())
 ```
 
 ### PostgreSQL Adapter
@@ -159,15 +177,17 @@ CREATE TABLE IF NOT EXISTS trace_events (
 **Usage:**
 
 ```typescript
-import { PostgresTraceAdapter } from "mcp-trace-js";
+import { TraceMiddleware, PostgresTraceAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 const psqlAdapter = new PostgresTraceAdapter({
   dsn: "postgresql://user:pass@host:port/dbname",
   // Optional: tableName
 });
 const traceMiddleware = new TraceMiddleware({ adapter: psqlAdapter });
 
-app.use('/mcp', traceMiddleware.express())
+traceMiddleware.init(server);
 ```
 
 ### Supabase Adapter
@@ -186,13 +206,15 @@ npm install @supabase/supabase-js
 
 ```typescript
 import { createClient } from "@supabase/supabase-js";
-import { SupabaseTraceAdapter } from "mcp-trace-js";
+import { TraceMiddleware, SupabaseTraceAdapter } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const supabaseAdapter = new SupabaseTraceAdapter({ supabaseClient: supabase });
 const traceMiddleware = new TraceMiddleware({ adapter: supabaseAdapter });
 
-app.use('/mcp', traceMiddleware.express())
+traceMiddleware.init(server);
 ```
 
 ### Multi-Adapter Example
@@ -201,12 +223,15 @@ Send traces to multiple backends at once:
 
 ```typescript
 import {
+  TraceMiddleware,
   FileAdapter,
   PostgresTraceAdapter,
   SupabaseTraceAdapter,
   MultiAdapter,
 } from "mcp-trace-js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const server = new McpServer({ name: "my-server", version: "1.0.0" });
 const fileAdapter = new FileAdapter("trace.log");
 const psqlAdapter = new PostgresTraceAdapter({
   dsn: "postgresql://user:pass@host:port/dbname",
@@ -220,8 +245,47 @@ const multiAdapter = new MultiAdapter(
 );
 const traceMiddleware = new TraceMiddleware({ adapter: multiAdapter });
 
-app.use('/mcp', traceMiddleware.express())
+traceMiddleware.init(server);
 ```
+
+---
+
+## Production-Ready Features
+
+### Error Handling & Resilience
+
+The middleware includes comprehensive error handling to ensure your MCP server continues running even if tracing fails:
+
+- **Graceful degradation**: If tracing fails, the original MCP flow continues uninterrupted
+- **Structured error logging**: All errors are logged with context for easy debugging
+- **Transport-level safety**: Errors in message handlers don't break the transport layer
+
+### Configuration Validation
+
+The middleware validates your configuration at startup:
+
+```typescript
+// This will throw a descriptive error if the adapter is invalid
+const traceMiddleware = new TraceMiddleware({
+  adapter: invalidAdapter, // ❌ Will throw: "TraceAdapter is required"
+});
+```
+
+### Memory Management
+
+Automatic cleanup prevents memory leaks:
+
+- **Request timeout handling**: Pending requests are automatically cleaned up after 5 minutes
+- **Proper shutdown**: All resources are cleaned up when `shutdown()` is called
+- **Timeout management**: All timeouts are tracked and cleared on shutdown
+
+### Type Safety
+
+Full TypeScript support with proper type guards:
+
+- **Message type validation**: Automatic detection of JSON-RPC requests, responses, and notifications
+- **Type-safe handlers**: All message handlers use proper TypeScript types
+- **IntelliSense support**: Full autocomplete and type checking
 
 ---
 
@@ -261,6 +325,7 @@ curl -H "X-Ignore-Traces: true" http://localhost:8080/mcp
 ```
 
 **Supported header formats:**
+
 - `X-Ignore-Traces: true`
 - `x-ignore-traces: true`
 

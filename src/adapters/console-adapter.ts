@@ -9,7 +9,7 @@ export class ConsoleAdapter implements TraceAdapter {
             session_id,
             client_id,
             duration,
-            arguments: entity_name,
+            entity_name,
             arguments: entity_params,
             response: entity_response,
             error
