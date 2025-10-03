@@ -4,27 +4,22 @@ import cors from 'cors';
 import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
-    ContexaTraceAdapter,
+    ConsoleAdapter,
     TraceMiddleware
-} from '../src';
+} from '../dist/index.js';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from "node:crypto";
 
-
-// Set up tracing middleware
-const contexaAdapter = new ContexaTraceAdapter();
-
-const traceMiddleware = new TraceMiddleware({
-    adapter: contexaAdapter
-});
 
 const server = new McpServer({
     name: "streamable-http-mcp-server",
     version: "1.0.0"
 });
 
-// Register a simple addition tool
+const traceMiddleware = new TraceMiddleware({ adapter: new ConsoleAdapter() });
+traceMiddleware.init(server);
+
 server.registerTool(
     "add",
     {
@@ -46,7 +41,6 @@ async function main() {
     const app = express();
     app.use(cors())
     app.use(express.json());
-    app.use('/mcp', traceMiddleware.express())
 
     const streamableHttpTransports: Record<string, StreamableHTTPServerTransport> = {};
 

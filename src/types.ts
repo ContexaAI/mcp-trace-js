@@ -1,5 +1,5 @@
 export interface TraceData {
-    type: 'request' | 'notification' | 'unknown';
+    type: 'request' | 'notification';
     method?: string;
     timestamp: string;
     session_id: string;
@@ -9,6 +9,7 @@ export interface TraceData {
     arguments?: any;
     response?: any;
     error?: string;
+    ip_address?: string;
 }
 
 export interface LogFields {

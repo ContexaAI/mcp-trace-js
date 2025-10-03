@@ -1,46 +1,36 @@
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { NextFunction, Request, Response } from "express";
-import {
-  LogFields,
-  TraceAdapter,
-  TraceData,
-  TraceMiddlewareOptions,
-} from "./types";
+// src/middleware/TraceMiddleware.ts
 
-const REQUEST_METHODS = [
-  "initialize",
-  "tools/list",
-  "tools/call",
-  "prompts/list",
-  "prompts/get",
-  "resources/list",
-  "resources/read",
-];
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport";
+import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, MessageExtraInfo } from "@modelcontextprotocol/sdk/types";
+import { LogFields, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
 
 /**
- * TraceMiddleware automatically logs metadata for incoming MCP-related requests in Express.js applications.
+ * TraceMiddleware hooks into an MCP server and logs
+ * all incoming/outgoing messages using the provided adapter.
  *
- * It supports capturing:
- * - method name
- * - session ID
- * - timestamps
- * - entity name/params
- * - response payload
- * - request duration
- * - error status
- *
- * You can configure which fields to log and plug in your own adapter for exporting logs.
+ * Example:
+ * ```ts
+ * const server = new McpServer({ name: "my-server", version: "1.0.0" });
+ * const tracer = new TraceMiddleware({ adapter: new ConsoleAdapter() });
+ * tracer.init(server);
+ * ```
  */
 export class TraceMiddleware {
   private adapter: TraceAdapter;
   private logFields: LogFields;
+  private server!: Server;
+  private pendingRequests: Map<string | number, {
+    startTime: number;
+    requestData: TraceData;
+    requestExtra?: MessageExtraInfo;
+    transport?: Transport;
+  }> = new Map();
+  private pendingRequestTimeouts = new Map<string | number, NodeJS.Timeout>();
 
-  /**
-   * Creates a new TraceMiddleware instance.
-   *
-   * @param options - Configuration options including adapter and optional logFields filter
-   */
   constructor(options: TraceMiddlewareOptions) {
+    this.validateOptions(options);
     this.adapter = options.adapter;
     this.logFields = {
       type: true,
@@ -57,363 +47,337 @@ export class TraceMiddleware {
     };
   }
 
-  /**
-   * Filters out trace fields that are disabled via configuration.
-   *
-   * @param traceData - The full trace data object
-   * @returns Filtered trace data with only enabled fields
-   */
-  private filterTraceData(traceData: TraceData): TraceData {
-    const filtered: Partial<TraceData> = {};
-
-    for (const [key, value] of Object.entries(traceData)) {
-      if (this.logFields[key as keyof LogFields] !== false) {
-        filtered[key as keyof TraceData] = value;
-      }
-    }
-
-    return filtered as TraceData;
+  public init(server: McpServer | Server): void {
+    this.server = server instanceof McpServer ? server.server : server;
+    this.traceEvent(this.server);
   }
 
-  /**
-   * Constructs and filters a trace data object using defaults and user input.
-   *
-   * @param data - Raw trace data to be formatted
-   * @returns A filtered and formatted TraceData object
-   */
-  private createTraceData(data: TraceData): TraceData {
+  private traceEvent(server: Server): void {
+    const originalConnect = server.connect.bind(server);
+
+    server.connect = async (transport: Transport) => {
+      this.handle(transport);
+      return originalConnect(transport);
+    };
+  }
+
+  private handle(transport: Transport): void {
+    try {
+      const originalOnMessage = transport.onmessage;
+      const originalSend = transport.send.bind(transport);
+
+      transport.onmessage = (message: JSONRPCMessage, extra?: MessageExtraInfo) => {
+        try {
+          this.handleIncomingMessage(message, extra, transport);
+          if (originalOnMessage) originalOnMessage(message, extra);
+        } catch (error) {
+          this.log('error', 'Error in onmessage handler', { error: error instanceof Error ? error.message : String(error) });
+          if (originalOnMessage) originalOnMessage(message, extra);
+        }
+      };
+
+      transport.send = async (message: JSONRPCMessage, options?: TransportSendOptions) => {
+        try {
+          this.handleOutgoingMessage(message, options, transport);
+          return originalSend(message, options);
+        } catch (error) {
+          this.log('error', 'Error in send handler', { error: error instanceof Error ? error.message : String(error) });
+          return originalSend(message, options);
+        }
+      };
+    } catch (error) {
+      this.log('error', 'Failed to setup transport handlers', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private handleIncomingMessage(message: any, extra?: MessageExtraInfo, transport?: Transport): void {
+    try {
+      if (this.isJSONRPCRequest(message)) {
+        this.handleRequest(message, extra, transport);
+      } else if (this.isJSONRPCNotification(message)) {
+        this.logMessage(message, extra);
+      }
+    } catch (error) {
+      this.log('error', 'Error handling incoming message', {
+        error: error instanceof Error ? error.message : String(error),
+        messageType: typeof message,
+        hasMethod: !!message.method,
+        hasId: message.id !== undefined
+      });
+    }
+  }
+
+  private handleOutgoingMessage(message: any, options?: TransportSendOptions, transport?: Transport): void {
+    try {
+      if (this.isJSONRPCResponse(message)) {
+        this.handleOutgoingResponse(message, options, transport);
+      } else if (this.isJSONRPCNotification(message)) {
+        this.logMessage(message, undefined);
+      }
+    } catch (error) {
+      this.log('error', 'Error handling outgoing message', {
+        error: error instanceof Error ? error.message : String(error),
+        messageType: typeof message,
+        hasId: message.id !== undefined,
+        hasResult: message.result !== undefined,
+        hasError: message.error !== undefined
+      });
+    }
+  }
+
+  private handleRequest(message: JSONRPCRequest, extra?: MessageExtraInfo, transport?: Transport): void {
+    try {
+      const startTime = Date.now();
+      const traceData = this.createTraceData(message, extra, transport);
+
+      if (traceData) {
+        this.pendingRequests.set(message.id, {
+          startTime,
+          requestData: traceData,
+          requestExtra: extra,
+          transport: transport
+        });
+
+        const timeout = setTimeout(() => {
+          this.pendingRequests.delete(message.id);
+          this.pendingRequestTimeouts.delete(message.id);
+        }, 5 * 60 * 1000);
+
+        this.pendingRequestTimeouts.set(message.id, timeout);
+
+        if (message.method && message.id === undefined) {
+          this.adapter.export(traceData);
+        }
+      }
+    } catch (error) {
+      this.log('error', 'Error handling request', {
+        error: error instanceof Error ? error.message : String(error),
+        messageId: message.id,
+        method: message.method
+      });
+    }
+  }
+
+
+  private handleOutgoingResponse(message: JSONRPCResponse, options?: TransportSendOptions, transport?: Transport): void {
+    try {
+      const pending = this.pendingRequests.get(message.id);
+      if (pending) {
+        const duration = Date.now() - pending.startTime;
+
+        const combinedTraceData = this.createCombinedTraceData(
+          pending.requestData,
+          message,
+          duration
+        );
+
+        if (combinedTraceData) {
+          this.adapter.export(combinedTraceData);
+        }
+
+        this.pendingRequests.delete(message.id);
+        const timeout = this.pendingRequestTimeouts.get(message.id);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.pendingRequestTimeouts.delete(message.id);
+        }
+      } else {
+        const responseTraceData = this.createTraceData({
+          ...message,
+        }, undefined, transport);
+
+        if (responseTraceData) {
+          this.adapter.export(responseTraceData);
+        }
+      }
+    } catch (error) {
+      this.log('error', 'Error handling outgoing response', {
+        error: error instanceof Error ? error.message : String(error),
+        messageId: message.id
+      });
+    }
+  }
+
+  private logMessage(message: JSONRPCMessage, extra?: MessageExtraInfo): void {
+    try {
+      const traceData = this.createTraceData(message, extra);
+      if (traceData) {
+        this.adapter.export(traceData);
+      }
+    } catch (err) {
+      console.error("TraceMiddleware logging failed:", err);
+    }
+  }
+
+  private createCombinedTraceData(
+    requestData: TraceData,
+    responseMessage: JSONRPCResponse,
+    duration: number
+  ): TraceData | undefined {
+    const now = new Date().toISOString();
+
+    const responseResult = responseMessage.result;
+    const combinedTraceData: TraceData = {
+      type: 'request',
+      method: requestData.method,
+      timestamp: now,
+      session_id: requestData.session_id,
+      client_id: requestData.client_id,
+      duration: duration,
+      entity_name: requestData.entity_name,
+      arguments: requestData.arguments,
+      response: responseResult
+    };
+
+    return this.filterTraceData(combinedTraceData);
+  }
+
+  private createTraceData(message: any, extra?: MessageExtraInfo, transport?: Transport): TraceData | undefined {
+    const now = new Date().toISOString();
+
+    const type: "request" | "notification" = (message?.method && message?.id === undefined)
+      ? "notification"
+      : "request";
+
+    const method = message.method || undefined;
+    let entityName: string = "";
+    if (["tools/call", "prompts/get", "resources/read"].includes(method)) {
+      entityName = message.params?.name || "";
+    }
+
+    const sessionIdHeader = extra?.requestInfo?.headers?.['mcp-session-id'];
+    const sessionIdFromTransport = transport?.sessionId;
+    const userAgentHeader = extra?.requestInfo?.headers?.['user-agent'];
+
+    const sessionId = (Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader) || sessionIdFromTransport || "";
+    const clientId = this.extractClientId(message) ||
+      (Array.isArray(userAgentHeader) ? userAgentHeader[0] : userAgentHeader) ||
+      undefined;
+
+    const ipAddress = this.getIpAddress(extra);
+
     const traceData: TraceData = {
-      ...data,
-      type: data.type,
-      timestamp: new Date().toISOString(),
-      session_id: data.session_id,
+      type,
+      method,
+      timestamp: now,
+      session_id: sessionId,
+      client_id: clientId,
+      duration: message._duration,
+      entity_name: entityName,
+      arguments: message.params,
+      response: message.result,
+      error: message.error ? `${message.error.code}: ${message.error.message}` : undefined,
+      ip_address: ipAddress,
     };
 
     return this.filterTraceData(traceData);
   }
 
-  /**
-   * Safely parses JSON response body, handling potential parsing errors.
-   *
-   * @param body - Response body to parse
-   * @returns Parsed JSON object or original body if parsing fails
-   */
-  private parseResponseBody(body: any): any {
-    if (typeof body === "string") {
-      try {
-        return JSON.parse(body);
-      } catch (error) {
-        // If JSON parsing fails, return the original string
-        return body;
+  private extractClientId(message: any): string | undefined {
+    return message._meta?.clientId || message.clientId || message.context?.clientId;
+  }
+
+  private filterTraceData(traceData: TraceData): TraceData {
+    const filtered: Partial<TraceData> = {};
+    for (const [key, value] of Object.entries(traceData)) {
+      if (this.logFields[key as keyof LogFields] !== false) {
+        filtered[key as keyof TraceData] = value;
       }
     }
-    return body;
+    return filtered as TraceData;
   }
 
-  /**
-   * Captures response body by intercepting various response methods.
-   *
-   * @param res - Express response object
-   * @returns Object containing captured response data
-   */
-  private captureResponseBody(res: Response): {
-    body: any;
-    contentType: string | undefined;
-  } {
-    let capturedBody: any = null;
-    let contentType: string | undefined = undefined;
-
-    // Store original methods
-    const originalSend = res.send.bind(res);
-    const originalJson = res.json.bind(res);
-    const originalEnd = res.end.bind(res);
-    const originalWrite = res.write.bind(res);
-
-    // Track response chunks for non-JSON responses
-    const chunks: Buffer[] = [];
-
-    // Override res.send()
-    res.send = (body: any): Response => {
-      capturedBody = this.parseResponseBody(body);
-      contentType = res.getHeader("content-type") as string;
-      res.locals.responseBody = capturedBody;
-      res.locals.contentType = contentType;
-      return originalSend(body);
-    };
-
-    // Override res.json()
-    res.json = (body: any): Response => {
-      capturedBody = body;
-      contentType = "application/json";
-      res.locals.responseBody = capturedBody;
-      res.locals.contentType = contentType;
-      return originalJson(body);
-    };
-
-    const parseResponseBody = this.parseResponseBody;
-    // Override res.write() to capture streaming responses
-    res.write = function (
-      this: Response,
-      chunk: any,
-      encodingOrCallback?: any,
-      callback?: any
-    ): boolean {
-      if (chunk) {
-        const encoding =
-          typeof encodingOrCallback === "string"
-            ? encodingOrCallback
-            : undefined;
-        if (typeof chunk === "string") {
-          if (encoding && Buffer.isEncoding(encoding)) {
-            chunks.push(Buffer.from(chunk, encoding));
-          } else {
-            chunks.push(Buffer.from(chunk));
-          }
-        } else {
-          chunks.push(Buffer.from(chunk));
-        }
-      }
-      return originalWrite.apply(this, arguments as any);
-    };
-
-    // Override res.end() to capture final response
-    res.end = function (
-      this: Response,
-      chunk?: any,
-      encodingOrCallback?: any,
-      callback?: any
-    ): Response {
-      if (chunk) {
-        const encoding =
-          typeof encodingOrCallback === "string"
-            ? encodingOrCallback
-            : undefined;
-        if (typeof chunk === "string") {
-          if (encoding && Buffer.isEncoding(encoding)) {
-            chunks.push(Buffer.from(chunk, encoding));
-          } else {
-            chunks.push(Buffer.from(chunk));
-          }
-        } else {
-          chunks.push(Buffer.from(chunk));
-        }
-      }
-
-      // If we haven't captured body yet and have chunks, combine them
-      if (!capturedBody && chunks.length > 0) {
-        const fullBody = Buffer.concat(chunks).toString("utf8");
-        capturedBody = parseResponseBody(fullBody);
-        contentType = res.getHeader("content-type") as string;
-        res.locals.responseBody = capturedBody;
-        res.locals.contentType = contentType;
-      }
-
-      return originalEnd.apply(this, arguments as any);
-    };
-
-    return { body: capturedBody, contentType };
-  }
-
-  /**
-   * Optionally flushes buffered trace logs using the adapter.
-   *
-   * @param timeout - Optional timeout in milliseconds
-   */
-  async flush(timeout?: number): Promise<void> {
+  public async flush(timeout?: number): Promise<void> {
     await this.adapter.flush?.(timeout);
   }
 
-  /**
-   * Optionally shuts down the adapter and clears resources.
-   */
-  async shutdown(): Promise<void> {
-    await this.adapter.shutdown?.();
+  public async shutdown(): Promise<void> {
+    try {
+      this.cleanup();
+      await this.adapter.shutdown?.();
+    } catch (error) {
+      this.log('error', 'Error during shutdown', { error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
-  /**
-   * Returns the Express.js middleware function.
-   *
-   * This middleware extracts request metadata and logs it via the adapter.
-   *
-   * Enhanced to properly capture response bodies from various response methods.
-   * Supports X-Ignore-Traces header to skip tracing for specific requests.
-   */
-  express() {
-    return (req: Request, res: Response, next: NextFunction) => {
-      // Check if tracing should be ignored for this request
-      const ignoreTraces =
-        req.headers["x-ignore-traces"] === "true" ||
-        req.headers["X-Ignore-Traces"] === "true";
+  private cleanup(): void {
+    this.pendingRequests.clear();
 
-      if (ignoreTraces) {
-        // Skip all tracing logic and continue to next middleware
-        return next();
-      }
+    for (const timeout of this.pendingRequestTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.pendingRequestTimeouts.clear();
 
-      const start = Date.now();
+    this.server = null as any;
+  }
 
-      const method = this.getMethod(req);
-      const type = this.getType(req);
-      const entityName = this.getEntityName(req);
-      const entityParams = this.getEntityParams(req);
+  private validateOptions(options: TraceMiddlewareOptions): void {
+    if (!options.adapter) {
+      throw new Error('TraceAdapter is required');
+    }
 
-      // Set up response body capture
-      this.captureResponseBody(res);
+    if (typeof options.adapter.export !== 'function') {
+      throw new Error('TraceAdapter must implement export method');
+    }
+  }
 
-      // Hook into the response finish event
-      res.on("finish", () => {
-        const duration = Date.now() - start;
-
-        // Get the captured response body
-        const entityResponse = this.getEntityResponse(req, res);
-
-        const sessionID = this.getSessionID(req, res);
-        const clientID = this.getClientID(req);
-
-        const traceData = this.createTraceData({
-          type,
-          method,
-          timestamp: new Date().toISOString(),
-          session_id: sessionID,
-          client_id: clientID,
-          entity_name: entityName,
-          arguments: entityParams,
-          response: entityResponse,
-          duration,
-          error: res.statusCode >= 400 ? `HTTP ${res.statusCode}` : undefined,
-        });
-
-        this.adapter.export(traceData);
-      });
-
-      // Handle cases where the connection is aborted
-      res.on("close", () => {
-        if (!res.writableEnded) {
-          const duration = Date.now() - start;
-
-          const sessionID = this.getSessionID(req, res);
-          const clientID = this.getClientID(req);
-
-          const traceData = this.createTraceData({
-            type,
-            method,
-            timestamp: new Date().toISOString(),
-            session_id: sessionID,
-            client_id: clientID,
-            entity_name: entityName,
-            arguments: entityParams,
-            response: undefined,
-            duration,
-            error: "Connection aborted",
-          });
-
-          this.adapter.export(traceData);
-        }
-      });
-
-      next();
+  private log(level: 'info' | 'warn' | 'error', message: string, data?: any): void {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      data,
+      middleware: 'TraceMiddleware'
     };
+
+    console[level](JSON.stringify(logEntry));
   }
 
-  /**
-   * Extracts the method field from the request body.
-   *
-   * @param req - Express request object
-   * @returns Method string if available
-   */
-  private getMethod(req: Request): string | undefined {
-    return req.body?.method;
+
+  private isJSONRPCRequest(message: any): message is JSONRPCRequest {
+    return message && typeof message.method === 'string' && message.id !== undefined;
   }
 
-  /**
-   * Determines the type of the request (e.g., request, notification, or unknown).
-   *
-   * @param req - Express request object
-   * @returns Type of the request
-   */
-  private getType(req: Request): "request" | "notification" | "unknown" {
-    const method = req.body?.method;
-
-    if (REQUEST_METHODS.includes(method)) {
-      return "request";
-    }
-
-    if (method?.startsWith("notifications/")) {
-      return "notification";
-    }
-
-    return "unknown";
+  private isJSONRPCResponse(message: any): message is JSONRPCResponse {
+    return message && message.id !== undefined && (message.result !== undefined || message.error !== undefined);
   }
 
-  /**
-   * Extracts the entity name from the request body for supported methods.
-   *
-   * @param req - Express request object
-   * @returns Name of the entity if present
-   */
-  private getEntityName(req: Request): string | undefined {
-    const method = req.body?.method;
-
-    switch (method) {
-      case "tools/call":
-      case "prompts/get":
-      case "resources/read":
-        return req.body?.params?.name;
-      default:
-        return undefined;
-    }
+  private isJSONRPCNotification(message: any): boolean {
+    return message && typeof message.method === 'string' && message.id === undefined;
   }
 
-  /**
-   * Extracts the entity parameters from the request body.
-   *
-   * @param req - Express request object
-   * @returns Parameters object if present
-   */
-  private getEntityParams(req: Request): any | undefined {
-    return req.body?.params;
-  }
+  private getIpAddress(extra?: MessageExtraInfo): string | undefined {
+    if (!extra?.requestInfo?.headers) return undefined;
 
-  /**
-   * Extracts the response from multiple sources with proper fallback handling.
-   *
-   * Priority order:
-   * 1. Server-generated response from res.locals.responseBody
-   * 2. Inline response from request body
-   * 3. undefined if no response found
-   *
-   * @param req - Express request object
-   * @param res - Express response object
-   * @returns Response body if present
-   */
-  private getEntityResponse(req: Request, res: Response): any | undefined {
-    // First priority: server-generated response (captured by middleware)
-    if (res.locals?.responseBody !== undefined) {
-      return res.locals.responseBody;
+    const headers = extra.requestInfo.headers;
+
+    const xForwardedFor = headers['x-forwarded-for'];
+    const xRealIp = headers['x-real-ip'];
+    const cfConnectingIp = headers['cf-connecting-ip']; // Cloudflare
+    const xClientIp = headers['x-client-ip'];
+    const remoteAddr = headers['remote-addr'];
+
+    if (xForwardedFor) {
+      const ips = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
+      return ips.split(',')[0].trim();
     }
 
-    // Second priority: inline response from request body (for client-provided responses)
-    if (req.body?.response !== undefined) {
-      return req.body.response;
+    if (xRealIp) {
+      return Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
     }
 
-    // No response found
+    if (cfConnectingIp) {
+      return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+    }
+
+    if (xClientIp) {
+      return Array.isArray(xClientIp) ? xClientIp[0] : xClientIp;
+    }
+
+    if (remoteAddr) {
+      return Array.isArray(remoteAddr) ? remoteAddr[0] : remoteAddr;
+    }
+
     return undefined;
-  }
-
-  private getClientID(req: Request): string | undefined {
-    if (isInitializeRequest(req.body)) {
-      return req.body.params.clientInfo.name;
-    }
-
-    return req.headers["mcp-client-id"] as string;
-  }
-
-  private getSessionID(req: Request, res: Response): string {
-    if (isInitializeRequest(req.body)) {
-      return res.getHeader("mcp-session-id") as string;
-    }
-
-    return req.headers["mcp-session-id"] as string;
   }
 }
