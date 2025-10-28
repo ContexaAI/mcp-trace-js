@@ -5,6 +5,7 @@ import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
     ConsoleAdapter,
+    MaskFunction,
     TraceMiddleware
 } from '../dist/index.js';
 
@@ -17,7 +18,41 @@ const server = new McpServer({
     version: "1.0.0"
 });
 
-const traceMiddleware = new TraceMiddleware({ adapter: new ConsoleAdapter() });
+// Example mask function to hide PII data
+const maskPII: MaskFunction = (data: any) => {
+    if (typeof data !== 'object' || data === null) {
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => maskPII(item));
+    }
+
+    const masked = { ...data };
+
+    // List of PII fields to mask
+    const piiFields = ['password', 'ssn', 'socialSecurityNumber', 'creditCard', 'email', 'phone', 'address'];
+
+    for (const field of piiFields) {
+        if (masked[field]) {
+            masked[field] = '[MASKED]';
+        }
+    }
+
+    // Recursively mask nested objects
+    for (const [key, value] of Object.entries(masked)) {
+        if (typeof value === 'object' && value !== null) {
+            masked[key] = maskPII(value);
+        }
+    }
+
+    return masked;
+};
+
+const traceMiddleware = new TraceMiddleware({
+    adapter: new ConsoleAdapter(),
+    mask: maskPII
+});
 traceMiddleware.init(server);
 
 server.registerTool(
@@ -33,6 +68,40 @@ server.registerTool(
     async ({ a, b }) => {
         return {
             content: [{ type: "text", text: String(a + b) }],
+        };
+    }
+);
+
+server.registerTool(
+    "createUser",
+    {
+        title: "Create User Tool",
+        description: "Creates a user with personal information (PII will be masked in traces).",
+        inputSchema: {
+            name: z.string(),
+            email: z.string().email(),
+            password: z.string(),
+            phone: z.string(),
+            ssn: z.string(),
+        }
+    },
+    async ({ name, email, password, phone, ssn }) => {
+        // Simulate user creation
+        const user = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            email,
+            password: '[HASHED]', // In real app, this would be hashed
+            phone,
+            ssn: ssn.replace(/\d(?=\d{4})/g, '*'), // Mask SSN
+            createdAt: new Date().toISOString()
+        };
+
+        return {
+            content: [{
+                type: "text",
+                text: `User created successfully with ID: ${user.id}`
+            }],
         };
     }
 );

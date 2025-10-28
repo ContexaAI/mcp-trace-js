@@ -4,7 +4,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport";
 import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, MessageExtraInfo } from "@modelcontextprotocol/sdk/types";
-import { LogFields, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
+import { LogFields, MaskFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
 
 /**
  * TraceMiddleware hooks into an MCP server and logs
@@ -16,10 +16,24 @@ import { LogFields, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./ty
  * const tracer = new TraceMiddleware({ adapter: new ConsoleAdapter() });
  * tracer.init(server);
  * ```
+ *
+ * With PII masking:
+ * ```ts
+ * const maskPII = (data: any) => {
+ *   // Custom logic to mask sensitive data
+ *   return data;
+ * };
+ * const tracer = new TraceMiddleware({ 
+ *   adapter: new ConsoleAdapter(),
+ *   mask: maskPII 
+ * });
+ * ```
  */
+
 export class TraceMiddleware {
   private adapter: TraceAdapter;
   private logFields: LogFields;
+  private mask?: MaskFunction;
   private server!: Server;
   private pendingRequests: Map<string | number, {
     startTime: number;
@@ -32,6 +46,7 @@ export class TraceMiddleware {
   constructor(options: TraceMiddlewareOptions) {
     this.validateOptions(options);
     this.adapter = options.adapter;
+    this.mask = options.mask;
     this.logFields = {
       type: true,
       method: true,
@@ -225,8 +240,8 @@ export class TraceMiddleware {
       client_id: requestData.client_id,
       duration: duration,
       entity_name: requestData.entity_name,
-      arguments: requestData.arguments,
-      response: responseResult
+      arguments: this.applyMasking(requestData.arguments),
+      response: this.applyMasking(responseResult)
     };
 
     return this.filterTraceData(combinedTraceData);
@@ -264,8 +279,8 @@ export class TraceMiddleware {
       client_id: clientId,
       duration: message._duration,
       entity_name: entityName,
-      arguments: message.params,
-      response: message.result,
+      arguments: this.applyMasking(message.params),
+      response: this.applyMasking(message.result),
       error: message.error ? `${message.error.code}: ${message.error.message}` : undefined,
       ip_address: ipAddress,
     };
@@ -285,6 +300,21 @@ export class TraceMiddleware {
       }
     }
     return filtered as TraceData;
+  }
+
+  private applyMasking(data: any): any {
+    if (!this.mask || data === null || data === undefined) {
+      return data;
+    }
+
+    try {
+      return this.mask(data);
+    } catch (error) {
+      this.log('warn', 'Error applying masking function', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return data;
+    }
   }
 
   public async flush(timeout?: number): Promise<void> {

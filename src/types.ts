@@ -31,7 +31,10 @@ export interface TraceAdapter {
     shutdown?(): Promise<void>;
 }
 
+export type MaskFunction = (data: any) => any;
+
 export interface TraceMiddlewareOptions {
     adapter: TraceAdapter;
     logFields?: LogFields;
+    mask?: MaskFunction;
 } 
