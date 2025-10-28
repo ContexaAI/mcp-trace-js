@@ -44,7 +44,7 @@ import { IdentifyUser, LogFields, RedactFunction, TraceAdapter, TraceData, Trace
  * 
  * const tracer = new TraceMiddleware({ 
  *   adapter: new ConsoleAdapter(),
- *   userFunction: extractUser
+ *   identifyUser: extractUser
  * });
  * ```
  */
@@ -53,7 +53,7 @@ export class TraceMiddleware {
   private adapter: TraceAdapter;
   private logFields: LogFields;
   private redact?: RedactFunction;
-  private userFunction?: IdentifyUser;
+  private identifyUser?: IdentifyUser;
   private server!: Server;
   private pendingRequests: Map<string | number, {
     startTime: number;
@@ -67,7 +67,7 @@ export class TraceMiddleware {
     this.validateOptions(options);
     this.adapter = options.adapter;
     this.redact = options.redact;
-    this.userFunction = options.identifyUser;
+    this.identifyUser = options.identifyUser;
     this.logFields = {
       type: true,
       method: true,
@@ -440,12 +440,12 @@ export class TraceMiddleware {
   }
 
   private getUserInfo(extra?: MessageExtraInfo): { user_id?: string; user_name?: string; user_email?: string } {
-    if (!this.userFunction || !extra?.requestInfo?.headers) {
+    if (!this.identifyUser || !extra?.requestInfo?.headers) {
       return {};
     }
 
     try {
-      const user = this.userFunction(extra.requestInfo.headers);
+      const user = this.identifyUser(extra.requestInfo.headers);
       return user || {};
     } catch (error) {
       this.log('warn', 'Error extracting user information', {
