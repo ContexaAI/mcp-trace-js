@@ -4,7 +4,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport";
 import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, MessageExtraInfo } from "@modelcontextprotocol/sdk/types";
-import { LogFields, MaskFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
+import { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
 
 /**
  * TraceMiddleware hooks into an MCP server and logs
@@ -17,15 +17,15 @@ import { LogFields, MaskFunction, TraceAdapter, TraceData, TraceMiddlewareOption
  * tracer.init(server);
  * ```
  *
- * With PII masking:
+ * With PII redaction:
  * ```ts
- * const maskPII = (data: any) => {
- *   // Custom logic to mask sensitive data
+ * const redactPII = (data: any) => {
+ *   // Custom logic to redact sensitive data
  *   return data;
  * };
  * const tracer = new TraceMiddleware({ 
  *   adapter: new ConsoleAdapter(),
- *   mask: maskPII 
+ *   redact: redactPII 
  * });
  * ```
  */
@@ -33,7 +33,7 @@ import { LogFields, MaskFunction, TraceAdapter, TraceData, TraceMiddlewareOption
 export class TraceMiddleware {
   private adapter: TraceAdapter;
   private logFields: LogFields;
-  private mask?: MaskFunction;
+  private redact?: RedactFunction;
   private server!: Server;
   private pendingRequests: Map<string | number, {
     startTime: number;
@@ -46,7 +46,7 @@ export class TraceMiddleware {
   constructor(options: TraceMiddlewareOptions) {
     this.validateOptions(options);
     this.adapter = options.adapter;
-    this.mask = options.mask;
+    this.redact = options.redact;
     this.logFields = {
       type: true,
       method: true,
@@ -240,8 +240,8 @@ export class TraceMiddleware {
       client_id: requestData.client_id,
       duration: duration,
       entity_name: requestData.entity_name,
-      arguments: this.applyMasking(requestData.arguments),
-      response: this.applyMasking(responseResult)
+      request: this.applyRedaction(requestData.request),
+      response: this.applyRedaction(responseResult)
     };
 
     return this.filterTraceData(combinedTraceData);
@@ -279,8 +279,8 @@ export class TraceMiddleware {
       client_id: clientId,
       duration: message._duration,
       entity_name: entityName,
-      arguments: this.applyMasking(message.params),
-      response: this.applyMasking(message.result),
+      request: this.applyRedaction(message.params),
+      response: this.applyRedaction(message.result),
       error: message.error ? `${message.error.code}: ${message.error.message}` : undefined,
       ip_address: ipAddress,
     };
@@ -302,15 +302,15 @@ export class TraceMiddleware {
     return filtered as TraceData;
   }
 
-  private applyMasking(data: any): any {
-    if (!this.mask || data === null || data === undefined) {
+  private applyRedaction(data: any): any {
+    if (!this.redact || data === null || data === undefined) {
       return data;
     }
 
     try {
-      return this.mask(data);
+      return this.redact(data);
     } catch (error) {
-      this.log('warn', 'Error applying masking function', {
+      this.log('warn', 'Error applying redaction function', {
         error: error instanceof Error ? error.message : String(error)
       });
       return data;

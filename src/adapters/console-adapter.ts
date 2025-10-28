@@ -5,17 +5,33 @@ export class ConsoleAdapter implements TraceAdapter {
         const {
             type,
             method,
-            timestamp,
-            session_id,
-            client_id,
-            duration,
             entity_name,
-            arguments: entity_params,
-            response: entity_response,
-            error
+            request,
+            response,
+            timestamp,
+            duration,
+            id,
+            session_id,
+            user_id,
+            user_name,
+            user_email,
+            client_id,
+            client_name,
+            client_version,
+            server_id,
+            server_name,
+            server_version,
+            is_error,
+            error,
+            ip_address,
+            context,
+            sdk_language,
+            sdk_version,
+            mcp_trace_version,
+            metadata
         } = traceData;
 
-        const status = error
+        const status = error || is_error
             ? this.colorText(' ERROR ', 'bgRed', 'bold')
             : this.colorText(' SUCCESS ', 'bgGreen', 'bold');
 
@@ -24,16 +40,49 @@ export class ConsoleAdapter implements TraceAdapter {
         console.log(`${this.colorText('Trace Log', 'cyan', 'bold')} ${status}`);
         console.log(this.grayLine());
 
+        // Basic trace info
         this.logField('Type', type);
         this.logField('Method', method);
-        this.logField('Timestamp', timestamp);
-        this.logField('Session ID', session_id);
-        this.logField('Client ID', client_id);
-        this.logField('Duration', duration !== undefined ? `${duration} ms` : undefined);
         this.logField('Entity Name', entity_name);
-        this.logField('Entity Params', this.formatJSON(entity_params));
-        this.logField('Entity Response', this.formatJSON(entity_response));
+        this.logField('Timestamp', timestamp);
+        this.logField('Duration', duration !== undefined ? `${duration} ms` : undefined);
+        this.logField('Trace ID', id);
+        this.logField('Session ID', session_id);
+
+        // User info
+        this.logField('User ID', user_id);
+        this.logField('User Name', user_name);
+        this.logField('User Email', user_email);
+
+        // Client info
+        this.logField('Client ID', client_id);
+        this.logField('Client Name', client_name);
+        this.logField('Client Version', client_version);
+
+        // Server info
+        this.logField('Server ID', server_id);
+        this.logField('Server Name', server_name);
+        this.logField('Server Version', server_version);
+
+        // Request/Response
+        this.logField('Request', this.formatJSON(request));
+        this.logField('Response', this.formatJSON(response));
+
+        // Error info
+        this.logField('Is Error', is_error);
         this.logField('Error', error, 'red');
+
+        // Network & Context
+        this.logField('IP Address', ip_address);
+        this.logField('Context', context);
+
+        // SDK info
+        this.logField('SDK Language', sdk_language);
+        this.logField('SDK Version', sdk_version);
+        this.logField('MCP Trace Version', mcp_trace_version);
+
+        // Metadata
+        this.logField('Metadata', this.formatJSON(metadata));
 
         console.log(this.grayLine());
         console.log('');

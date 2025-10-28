@@ -9,13 +9,29 @@ CREATE TABLE IF NOT EXISTS trace_events (
   timestamp TIMESTAMPTZ NOT NULL,
   type TEXT NOT NULL,
   method TEXT,
-  session_id TEXT NOT NULL,
-  client_id TEXT,
-  duration INTEGER,
   entity_name TEXT,
-  arguments JSONB,
-  response TEXT,
-  error TEXT
+  request JSONB,
+  response JSONB,
+  duration INTEGER,
+  trace_id TEXT,
+  session_id TEXT NOT NULL,
+  user_id TEXT,
+  user_name TEXT,
+  user_email TEXT,
+  client_id TEXT,
+  client_name TEXT,
+  client_version TEXT,
+  server_id TEXT,
+  server_name TEXT,
+  server_version TEXT,
+  is_error BOOLEAN,
+  error TEXT,
+  ip_address TEXT,
+  context TEXT,
+  sdk_language TEXT,
+  sdk_version TEXT,
+  mcp_trace_version TEXT,
+  metadata JSONB
 );
 ```
  */
@@ -81,26 +97,46 @@ export class PostgresTraceAdapter implements TraceAdapter {
 
       const insertSQL = `
         INSERT INTO ${this.tableName} (
-          timestamp, type, method, session_id, client_id, duration,
-          entity_name, arguments, response, error
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          timestamp, type, method, entity_name, request, response, duration,
+          trace_id, session_id, user_id, user_name, user_email,
+          client_id, client_name, client_version,
+          server_id, server_name, server_version,
+          is_error, error, ip_address, context,
+          sdk_language, sdk_version, mcp_trace_version, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       `;
 
       const values = [
         traceData.timestamp,
         traceData.type,
         traceData.method ?? null,
-        traceData.session_id,
-        traceData.client_id ?? null,
-        traceData.duration ?? null,
-        traceData.arguments ?? null,
-        traceData.arguments ? JSON.stringify(traceData.arguments) : null,
+        traceData.entity_name ?? null,
+        traceData.request ? JSON.stringify(traceData.request) : null,
         traceData.response !== undefined
           ? typeof traceData.response === 'object'
             ? JSON.stringify(traceData.response)
             : String(traceData.response)
           : null,
-        traceData.error ?? null
+        traceData.duration ?? null,
+        traceData.id ?? null,
+        traceData.session_id,
+        traceData.user_id ?? null,
+        traceData.user_name ?? null,
+        traceData.user_email ?? null,
+        traceData.client_id ?? null,
+        traceData.client_name ?? null,
+        traceData.client_version ?? null,
+        traceData.server_id ?? null,
+        traceData.server_name ?? null,
+        traceData.server_version ?? null,
+        traceData.is_error ?? null,
+        traceData.error ?? null,
+        traceData.ip_address ?? null,
+        traceData.context ?? null,
+        traceData.sdk_language ?? null,
+        traceData.sdk_version ?? null,
+        traceData.mcp_trace_version ?? null,
+        traceData.metadata ? JSON.stringify(traceData.metadata) : null
       ];
 
       await client.query(insertSQL, values);

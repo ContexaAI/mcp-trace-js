@@ -5,9 +5,9 @@ import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
     ConsoleAdapter,
-    MaskFunction,
+    RedactFunction,
     TraceMiddleware
-} from '../dist/index.js';
+} from '../src/index.js';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from "node:crypto";
@@ -18,40 +18,40 @@ const server = new McpServer({
     version: "1.0.0"
 });
 
-// Example mask function to hide PII data
-const maskPII: MaskFunction = (data: any) => {
+// Example redact function to hide PII data
+const redactPII: RedactFunction = (data: any) => {
     if (typeof data !== 'object' || data === null) {
         return data;
     }
 
     if (Array.isArray(data)) {
-        return data.map(item => maskPII(item));
+        return data.map(item => redactPII(item));
     }
 
-    const masked = { ...data };
+    const redacted = { ...data };
 
-    // List of PII fields to mask
+    // List of PII fields to redact
     const piiFields = ['password', 'ssn', 'socialSecurityNumber', 'creditCard', 'email', 'phone', 'address'];
 
     for (const field of piiFields) {
-        if (masked[field]) {
-            masked[field] = '[MASKED]';
+        if (redacted[field]) {
+            redacted[field] = '[REDACTED]';
         }
     }
 
-    // Recursively mask nested objects
-    for (const [key, value] of Object.entries(masked)) {
+    // Recursively redact nested objects
+    for (const [key, value] of Object.entries(redacted)) {
         if (typeof value === 'object' && value !== null) {
-            masked[key] = maskPII(value);
+            redacted[key] = redactPII(value);
         }
     }
 
-    return masked;
+    return redacted;
 };
 
 const traceMiddleware = new TraceMiddleware({
     adapter: new ConsoleAdapter(),
-    mask: maskPII
+    redact: redactPII
 });
 traceMiddleware.init(server);
 
@@ -76,7 +76,7 @@ server.registerTool(
     "createUser",
     {
         title: "Create User Tool",
-        description: "Creates a user with personal information (PII will be masked in traces).",
+        description: "Creates a user with personal information (PII will be redacted in traces).",
         inputSchema: {
             name: z.string(),
             email: z.string().email(),
