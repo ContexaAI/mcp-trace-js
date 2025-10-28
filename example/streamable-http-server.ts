@@ -7,7 +7,7 @@ import {
     ConsoleAdapter,
     RedactFunction,
     TraceMiddleware
-} from '../src/index.js';
+} from '../dist/index.js';
 
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from "node:crypto";
@@ -178,9 +178,8 @@ async function main() {
     const PORT = 8080
 
     app.listen(PORT, () => {
-        console.error(`MCP Web Server running at http://localhost:${PORT}`);
-        console.error(`- SSE Endpoint: http://localhost:${PORT}/sse`);
-        console.error(`- Messages Endpoint: http://localhost:${PORT}/api/messages?sessionId=YOUR_SESSION_ID`);
+        console.error(`MCP Server running at http://localhost:${PORT}`);
+        console.error(`- MCP Endpoint: http://localhost:${PORT}/mcp`);
         console.error(`- Health Check: http://localhost:${PORT}/health`);
     });
 }
