@@ -1,6 +1,6 @@
 // Main exports
 export { TraceMiddleware } from './middleware';
-export { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from './types';
+export { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions, User, IdentifyUser as UserFunction } from './types';
 
 // Adapters
 export { ConsoleAdapter } from './adapters/console-adapter';

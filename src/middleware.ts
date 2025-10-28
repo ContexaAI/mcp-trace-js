@@ -4,7 +4,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport";
 import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, MessageExtraInfo } from "@modelcontextprotocol/sdk/types";
-import { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
+import { IdentifyUser, LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
 
 /**
  * TraceMiddleware hooks into an MCP server and logs
@@ -28,12 +28,32 @@ import { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOpti
  *   redact: redactPII 
  * });
  * ```
+ *
+ * With user identification from headers:
+ * ```ts
+ * const extractUser = (headers: Record<string, string | string[] | undefined>) => {
+ *   const userId = headers['x-user-id'] as string;
+ *   const userName = headers['x-user-name'] as string;
+ *   const userEmail = headers['x-user-email'] as string;
+ *   
+ *   if (userId && userName && userEmail) {
+ *     return { user_id: userId, user_name: userName, user_email: userEmail };
+ *   }
+ *   return undefined;
+ * };
+ * 
+ * const tracer = new TraceMiddleware({ 
+ *   adapter: new ConsoleAdapter(),
+ *   userFunction: extractUser
+ * });
+ * ```
  */
 
 export class TraceMiddleware {
   private adapter: TraceAdapter;
   private logFields: LogFields;
   private redact?: RedactFunction;
+  private userFunction?: IdentifyUser;
   private server!: Server;
   private pendingRequests: Map<string | number, {
     startTime: number;
@@ -47,6 +67,7 @@ export class TraceMiddleware {
     this.validateOptions(options);
     this.adapter = options.adapter;
     this.redact = options.redact;
+    this.userFunction = options.identifyUser;
     this.logFields = {
       type: true,
       method: true,
@@ -241,7 +262,10 @@ export class TraceMiddleware {
       duration: duration,
       entity_name: requestData.entity_name,
       request: this.applyRedaction(requestData.request),
-      response: this.applyRedaction(responseResult)
+      response: this.applyRedaction(responseResult),
+      user_id: requestData.user_id,
+      user_name: requestData.user_name,
+      user_email: requestData.user_email,
     };
 
     return this.filterTraceData(combinedTraceData);
@@ -270,6 +294,7 @@ export class TraceMiddleware {
       undefined;
 
     const ipAddress = this.getIpAddress(extra);
+    const userInfo = this.getUserInfo(extra);
 
     const traceData: TraceData = {
       type,
@@ -283,6 +308,9 @@ export class TraceMiddleware {
       response: this.applyRedaction(message.result),
       error: message.error ? `${message.error.code}: ${message.error.message}` : undefined,
       ip_address: ipAddress,
+      user_id: userInfo.user_id,
+      user_name: userInfo.user_name,
+      user_email: userInfo.user_email,
     };
 
     return this.filterTraceData(traceData);
@@ -409,5 +437,21 @@ export class TraceMiddleware {
     }
 
     return undefined;
+  }
+
+  private getUserInfo(extra?: MessageExtraInfo): { user_id?: string; user_name?: string; user_email?: string } {
+    if (!this.userFunction || !extra?.requestInfo?.headers) {
+      return {};
+    }
+
+    try {
+      const user = this.userFunction(extra.requestInfo.headers);
+      return user || {};
+    } catch (error) {
+      this.log('warn', 'Error extracting user information', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return {};
+    }
   }
 }

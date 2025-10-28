@@ -57,8 +57,17 @@ export interface TraceAdapter {
 
 export type RedactFunction = (data: any) => any;
 
+export interface User {
+    user_id: string;
+    user_name: string;
+    user_email: string;
+}
+
+export type IdentifyUser = (headers: Record<string, string | string[] | undefined>) => User | undefined;
+
 export interface TraceMiddlewareOptions {
     adapter: TraceAdapter;
     logFields?: LogFields;
     redact?: RedactFunction;
+    identifyUser?: IdentifyUser;
 } 
