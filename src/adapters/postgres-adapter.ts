@@ -48,6 +48,18 @@ export interface PostgresConfig {
    * Defaults to 'trace_events'.
    */
   tableName?: string;
+
+  /**
+   * Optional batch size for bulk inserts. When this many events are buffered,
+   * they will be inserted in a single batch. Defaults to 100.
+   */
+  batchSize?: number;
+
+  /**
+   * Optional timeout in milliseconds to force flush buffered events.
+   * Defaults to 5000ms (5 seconds).
+   */
+  flushInterval?: number;
 }
 
 /**
@@ -60,10 +72,40 @@ export class PostgresTraceAdapter implements TraceAdapter {
   private dsn: string;
   private tableName: string;
   private client: any = null;
+  private batchSize: number;
+  private flushInterval: number;
+  private buffer: TraceData[] = [];
+  private flushTimer: NodeJS.Timeout | null = null;
 
   constructor(config: PostgresConfig) {
     this.dsn = config.dsn;
     this.tableName = config.tableName || 'trace_events';
+    this.batchSize = config.batchSize || 100;
+    this.flushInterval = config.flushInterval || 5000;
+
+    // Set up automatic flushing
+    this.startFlushTimer();
+  }
+
+  /**
+   * Starts the automatic flush timer.
+   */
+  private startFlushTimer() {
+    this.flushTimer = setInterval(() => {
+      this.flush().catch(error => {
+        console.error('[PostgresTraceAdapter] Auto-flush failed:', error);
+      });
+    }, this.flushInterval);
+  }
+
+  /**
+   * Stops the automatic flush timer.
+   */
+  private stopFlushTimer() {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
   }
 
   /**
@@ -87,14 +129,53 @@ export class PostgresTraceAdapter implements TraceAdapter {
   }
 
   /**
-   * Inserts a trace event into the PostgreSQL table.
-   *
-   * @param traceData - The trace metadata to persist
+   * Converts a single trace data object to values array for SQL insertion.
    */
-  async export(traceData: TraceData): Promise<void> {
+  private traceDataToValues(traceData: TraceData): any[] {
+    return [
+      traceData.timestamp,
+      traceData.type,
+      traceData.method ?? null,
+      traceData.entity_name ?? null,
+      traceData.request ? JSON.stringify(traceData.request) : null,
+      traceData.response !== undefined
+        ? typeof traceData.response === 'object'
+          ? JSON.stringify(traceData.response)
+          : String(traceData.response)
+        : null,
+      traceData.duration ?? null,
+      traceData.id ?? null,
+      traceData.session_id,
+      traceData.user_id ?? null,
+      traceData.user_name ?? null,
+      traceData.user_email ?? null,
+      traceData.client_id ?? null,
+      traceData.client_name ?? null,
+      traceData.client_version ?? null,
+      traceData.server_id ?? null,
+      traceData.server_name ?? null,
+      traceData.server_version ?? null,
+      traceData.is_error ?? null,
+      traceData.error ?? null,
+      traceData.ip_address ?? null,
+      traceData.context ?? null,
+      traceData.sdk_language ?? null,
+      traceData.sdk_version ?? null,
+      traceData.mcp_trace_version ?? null,
+      traceData.metadata ? JSON.stringify(traceData.metadata) : null
+    ];
+  }
+
+  /**
+   * Performs a batch insert of trace events.
+   */
+  private async performBatchInsert(events: TraceData[]): Promise<void> {
+    if (events.length === 0) return;
+
     try {
       const client = await this.getClient();
 
+      // Build the batch insert query
       const insertSQL = `
         INSERT INTO ${this.tableName} (
           timestamp, type, method, entity_name, request, response, duration,
@@ -103,59 +184,66 @@ export class PostgresTraceAdapter implements TraceAdapter {
           server_id, server_name, server_version,
           is_error, error, ip_address, context,
           sdk_language, sdk_version, mcp_trace_version, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+        ) VALUES ${events.map((_, index) => {
+        const baseIndex = index * 27;
+        return `(${Array.from({ length: 27 }, (_, i) => `$${baseIndex + i + 1}`).join(', ')})`;
+      }).join(', ')}
       `;
 
-      const values = [
-        traceData.timestamp,
-        traceData.type,
-        traceData.method ?? null,
-        traceData.entity_name ?? null,
-        traceData.request ? JSON.stringify(traceData.request) : null,
-        traceData.response !== undefined
-          ? typeof traceData.response === 'object'
-            ? JSON.stringify(traceData.response)
-            : String(traceData.response)
-          : null,
-        traceData.duration ?? null,
-        traceData.id ?? null,
-        traceData.session_id,
-        traceData.user_id ?? null,
-        traceData.user_name ?? null,
-        traceData.user_email ?? null,
-        traceData.client_id ?? null,
-        traceData.client_name ?? null,
-        traceData.client_version ?? null,
-        traceData.server_id ?? null,
-        traceData.server_name ?? null,
-        traceData.server_version ?? null,
-        traceData.is_error ?? null,
-        traceData.error ?? null,
-        traceData.ip_address ?? null,
-        traceData.context ?? null,
-        traceData.sdk_language ?? null,
-        traceData.sdk_version ?? null,
-        traceData.mcp_trace_version ?? null,
-        traceData.metadata ? JSON.stringify(traceData.metadata) : null
-      ];
+      // Flatten all values into a single array
+      const values = events.flatMap(event => this.traceDataToValues(event));
 
       await client.query(insertSQL, values);
     } catch (error) {
-      console.error(`[PostgresTraceAdapter] Failed to insert into "${this.tableName}". Ensure the table exists.`, error);
+      console.error(`[PostgresTraceAdapter] Failed to batch insert into "${this.tableName}". Ensure the table exists.`, error);
     }
   }
 
   /**
-   * PostgreSQL writes are immediate; no flushing is required.
+   * Adds a trace event to the buffer for batch insertion.
+   * Events are automatically flushed when the buffer reaches batchSize
+   * or when the flush interval expires.
+   *
+   * @param traceData - The trace metadata to persist
+   */
+  async export(traceData: TraceData): Promise<void> {
+    // Add to buffer
+    this.buffer.push(traceData);
+
+    // If buffer is full, flush immediately
+    if (this.buffer.length >= this.batchSize) {
+      await this.flush();
+    }
+  }
+
+  /**
+   * Flushes all buffered trace events to PostgreSQL in a single batch insert.
    */
   async flush(): Promise<void> {
-    return;
+    if (this.buffer.length === 0) {
+      return;
+    }
+
+    // Create a copy of the buffer and clear it immediately to avoid race conditions
+    const eventsToInsert = [...this.buffer];
+    this.buffer = [];
+
+    // Perform the batch insert
+    await this.performBatchInsert(eventsToInsert);
   }
 
   /**
    * Closes the PostgreSQL connection and cleans up the client.
+   * Flushes any remaining buffered events before closing.
    */
   async shutdown(): Promise<void> {
+    // Stop the flush timer
+    this.stopFlushTimer();
+
+    // Flush any remaining events
+    await this.flush();
+
+    // Close the database connection
     if (this.client) {
       await this.client.end();
       this.client = null;
