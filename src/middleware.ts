@@ -4,7 +4,46 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport";
 import { JSONRPCMessage, JSONRPCRequest, JSONRPCResponse, MessageExtraInfo } from "@modelcontextprotocol/sdk/types";
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { IdentifyUser, LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions } from "./types";
+
+/**
+ * Gets version information from package.json files (cached for performance)
+ */
+let cachedVersions: { mcpTraceVersion: string; mcpSdkVersion: string } | null = null;
+
+function getVersions() {
+  if (cachedVersions) {
+    return cachedVersions;
+  }
+
+  try {
+    // Get mcp-trace version from current package.json
+    const mcpTracePackagePath = join(__dirname, '..', 'package.json');
+    const mcpTracePackage = JSON.parse(readFileSync(mcpTracePackagePath, 'utf8'));
+    const mcpTraceVersion = mcpTracePackage.version;
+
+    // Get MCP SDK version from node_modules
+    const mcpSdkPackagePath = join(__dirname, '..', 'node_modules', '@modelcontextprotocol', 'sdk', 'package.json');
+    const mcpSdkPackage = JSON.parse(readFileSync(mcpSdkPackagePath, 'utf8'));
+    const mcpSdkVersion = mcpSdkPackage.version;
+
+    cachedVersions = {
+      mcpTraceVersion,
+      mcpSdkVersion
+    };
+
+    return cachedVersions;
+  } catch (error) {
+    // Fallback to default values if package.json files can't be read
+    cachedVersions = {
+      mcpTraceVersion: 'unknown',
+      mcpSdkVersion: 'unknown'
+    };
+    return cachedVersions;
+  }
+}
 
 /**
  * TraceMiddleware hooks into an MCP server and logs
@@ -55,6 +94,7 @@ export class TraceMiddleware {
   private redact?: RedactFunction;
   private identifyUser?: IdentifyUser;
   private server!: Server;
+  private versions: { mcpTraceVersion: string; mcpSdkVersion: string };
   private pendingRequests: Map<string | number, {
     startTime: number;
     requestData: TraceData;
@@ -68,6 +108,7 @@ export class TraceMiddleware {
     this.adapter = options.adapter;
     this.redact = options.redact;
     this.identifyUser = options.identifyUser;
+    this.versions = getVersions();
     this.logFields = {
       type: true,
       method: true,
@@ -257,15 +298,29 @@ export class TraceMiddleware {
       type: 'request',
       method: requestData.method,
       timestamp: now,
+      id: requestData.id,
       session_id: requestData.session_id,
       client_id: requestData.client_id,
+      client_name: requestData.client_name,
+      client_version: requestData.client_version,
       duration: duration,
       entity_name: requestData.entity_name,
       request: this.applyRedaction(requestData.request),
       response: this.applyRedaction(responseResult),
+      is_error: requestData.is_error,
+      error: requestData.error,
+      ip_address: requestData.ip_address,
       user_id: requestData.user_id,
       user_name: requestData.user_name,
       user_email: requestData.user_email,
+      server_id: requestData.server_id,
+      server_name: requestData.server_name,
+      server_version: requestData.server_version,
+      context: requestData.context,
+      sdk_language: requestData.sdk_language,
+      sdk_version: requestData.sdk_version,
+      mcp_trace_version: requestData.mcp_trace_version,
+      metadata: requestData.metadata,
     };
 
     return this.filterTraceData(combinedTraceData);
@@ -300,17 +355,29 @@ export class TraceMiddleware {
       type,
       method,
       timestamp: now,
+      id: message.id,
       session_id: sessionId,
       client_id: clientId,
+      client_name: undefined,
+      client_version: undefined,
       duration: message._duration,
       entity_name: entityName,
       request: this.applyRedaction(message.params),
       response: this.applyRedaction(message.result),
+      is_error: !!message.error,
       error: message.error ? `${message.error.code}: ${message.error.message}` : undefined,
       ip_address: ipAddress,
       user_id: userInfo.user_id,
       user_name: userInfo.user_name,
       user_email: userInfo.user_email,
+      server_id: undefined,
+      server_name: undefined,
+      server_version: undefined,
+      context: undefined,
+      sdk_language: 'javascript',
+      sdk_version: this.versions.mcpSdkVersion,
+      mcp_trace_version: this.versions.mcpTraceVersion,
+      metadata: undefined,
     };
 
     return this.filterTraceData(traceData);
