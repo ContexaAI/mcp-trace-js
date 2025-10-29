@@ -8,6 +8,8 @@
 
 ---
 
+[![Node.js Package](https://github.com/ContexaAI/mcp-trace-js/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/ContexaAI/mcp-trace-js/actions/workflows/npm-publish.yml)
+
 ## Table of Contents
 
 - [Features](#features)
