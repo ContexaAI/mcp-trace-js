@@ -5,6 +5,7 @@ import express from 'express';
 import { z } from "zod"; // For defining tool input schemas
 import {
     ConsoleAdapter,
+    RedactFunction,
     TraceMiddleware
 } from '../dist/index.js';
 
@@ -17,7 +18,41 @@ const server = new McpServer({
     version: "1.0.0"
 });
 
-const traceMiddleware = new TraceMiddleware({ adapter: new ConsoleAdapter() });
+// Example redact function to hide PII data
+const redactPII: RedactFunction = (data: any) => {
+    if (typeof data !== 'object' || data === null) {
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => redactPII(item));
+    }
+
+    const redacted = { ...data };
+
+    // List of PII fields to redact
+    const piiFields = ['password', 'ssn', 'socialSecurityNumber', 'creditCard', 'email', 'phone', 'address'];
+
+    for (const field of piiFields) {
+        if (redacted[field]) {
+            redacted[field] = '[REDACTED]';
+        }
+    }
+
+    // Recursively redact nested objects
+    for (const [key, value] of Object.entries(redacted)) {
+        if (typeof value === 'object' && value !== null) {
+            redacted[key] = redactPII(value);
+        }
+    }
+
+    return redacted;
+};
+
+const traceMiddleware = new TraceMiddleware({
+    adapter: new ConsoleAdapter(),
+    redact: redactPII
+});
 traceMiddleware.init(server);
 
 server.registerTool(
@@ -33,6 +68,40 @@ server.registerTool(
     async ({ a, b }) => {
         return {
             content: [{ type: "text", text: String(a + b) }],
+        };
+    }
+);
+
+server.registerTool(
+    "createUser",
+    {
+        title: "Create User Tool",
+        description: "Creates a user with personal information (PII will be redacted in traces).",
+        inputSchema: {
+            name: z.string(),
+            email: z.string().email(),
+            password: z.string(),
+            phone: z.string(),
+            ssn: z.string(),
+        }
+    },
+    async ({ name, email, password, phone, ssn }) => {
+        // Simulate user creation
+        const user = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            email,
+            password: '[HASHED]', // In real app, this would be hashed
+            phone,
+            ssn: ssn.replace(/\d(?=\d{4})/g, '*'), // Mask SSN
+            createdAt: new Date().toISOString()
+        };
+
+        return {
+            content: [{
+                type: "text",
+                text: `User created successfully with ID: ${user.id}`
+            }],
         };
     }
 );
@@ -109,9 +178,8 @@ async function main() {
     const PORT = 8080
 
     app.listen(PORT, () => {
-        console.error(`MCP Web Server running at http://localhost:${PORT}`);
-        console.error(`- SSE Endpoint: http://localhost:${PORT}/sse`);
-        console.error(`- Messages Endpoint: http://localhost:${PORT}/api/messages?sessionId=YOUR_SESSION_ID`);
+        console.error(`MCP Server running at http://localhost:${PORT}`);
+        console.error(`- MCP Endpoint: http://localhost:${PORT}/mcp`);
         console.error(`- Health Check: http://localhost:${PORT}/health`);
     });
 }

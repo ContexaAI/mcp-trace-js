@@ -1,12 +1,13 @@
 // Main exports
 export { TraceMiddleware } from './middleware';
-export { LogFields, TraceAdapter, TraceData, TraceMiddlewareOptions } from './types';
+export { LogFields, RedactFunction, TraceAdapter, TraceData, TraceMiddlewareOptions, User, IdentifyUser as UserFunction } from './types';
 
 // Adapters
 export { ConsoleAdapter } from './adapters/console-adapter';
 export { ContexaTraceAdapter } from './adapters/contexa-adapter';
 export { FileAdapter } from './adapters/file-adapter';
 export { MultiAdapter } from './adapters/multi-adapters';
+export { OTLPAdapter, OTLPConfig } from './adapters/otlp-adapter';
 export { PostgresTraceAdapter } from './adapters/postgres-adapter';
 export { SupabaseConfig, SupabaseTraceAdapter } from './adapters/supabase-adapter';
 
