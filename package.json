@@ -1,6 +1,6 @@
 {
   "name": "mcp-trace",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Flexible, pluggable tracing middleware for Model Context Protocol (MCP) servers in JavaScript/TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
